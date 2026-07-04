@@ -15,7 +15,7 @@ export async function signUp(
 
   const supabase = await createClient()
 
-  const { error } = await supabase.auth.signUp({
+  const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
@@ -24,6 +24,11 @@ export async function signUp(
   })
 
   if (error) return { error: error.message }
+
+  // Email confirmation is enabled — no session yet
+  if (!data.session) {
+    return { error: 'Check your email and click the confirmation link to continue.' }
+  }
 
   redirect('/onboarding')
 }
