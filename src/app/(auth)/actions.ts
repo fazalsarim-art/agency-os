@@ -5,6 +5,14 @@ import { createClient } from '@/lib/supabase/server'
 
 type AuthState = { error: string } | null
 
+// Only allow same-origin relative redirects (guards against open-redirect via a
+// crafted ?next=… value). Used to return an invitee to /invite/[token].
+function safeNext(next: FormDataEntryValue | null, fallback: string): string {
+  return typeof next === 'string' && next.startsWith('/') && !next.startsWith('//')
+    ? next
+    : fallback
+}
+
 export async function signUp(
   _prevState: AuthState,
   formData: FormData
@@ -30,7 +38,7 @@ export async function signUp(
     return { error: 'Check your email and click the confirmation link to continue.' }
   }
 
-  redirect('/onboarding')
+  redirect(safeNext(formData.get('next'), '/onboarding'))
 }
 
 export async function signIn(
@@ -46,7 +54,7 @@ export async function signIn(
 
   if (error) return { error: error.message }
 
-  redirect('/dashboard')
+  redirect(safeNext(formData.get('next'), '/dashboard'))
 }
 
 export async function signOut() {

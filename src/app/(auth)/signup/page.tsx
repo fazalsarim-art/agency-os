@@ -1,15 +1,17 @@
 'use client'
 
-import { useActionState } from 'react'
+import { Suspense, useActionState } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { signUp } from '../actions'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 
-export default function SignupPage() {
+function SignupForm() {
   const [state, action, isPending] = useActionState(signUp, null)
+  const next = useSearchParams().get('next') ?? ''
 
   return (
     <Card className="w-full max-w-md">
@@ -19,6 +21,7 @@ export default function SignupPage() {
       </CardHeader>
       <form action={action}>
         <CardContent className="space-y-4">
+          {next && <input type="hidden" name="next" value={next} />}
           {state?.error && (
             <p className="text-sm text-destructive bg-destructive/10 p-3 rounded-md">
               {state.error}
@@ -65,12 +68,23 @@ export default function SignupPage() {
           </Button>
           <p className="text-sm text-muted-foreground text-center">
             Already have an account?{' '}
-            <Link href="/login" className="underline underline-offset-4 hover:text-primary">
+            <Link
+              href={next ? `/login?next=${encodeURIComponent(next)}` : '/login'}
+              className="underline underline-offset-4 hover:text-primary"
+            >
               Sign in
             </Link>
           </p>
         </CardFooter>
       </form>
     </Card>
+  )
+}
+
+export default function SignupPage() {
+  return (
+    <Suspense>
+      <SignupForm />
+    </Suspense>
   )
 }

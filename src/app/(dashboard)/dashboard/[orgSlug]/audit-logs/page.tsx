@@ -45,6 +45,10 @@ function describe(log: LogRow, nameOf: (id: string | null) => string): string {
       return `changed ${nameOf(log.target_id)}’s role to ${metaStr(m, 'newRole')}`
     case 'member.removed':
       return `removed ${nameOf(log.target_id)} from the organization`
+    case 'invite.created':
+      return `invited ${metaStr(m, 'email')} as ${metaStr(m, 'role')}`
+    case 'invite.accepted':
+      return `accepted the invitation to join as ${metaStr(m, 'role')}`
     default:
       return log.action
   }

@@ -2,6 +2,7 @@ import { requireOrgMembership } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { hasPermission, type Role } from '@/lib/permissions'
 import { MembersTable, type MemberRow } from './members-table'
+import { InviteSection, type InviteRow } from './invite-section'
 
 export default async function MembersPage({
   params,
@@ -40,6 +41,25 @@ export default async function MembersPage({
     email: profileMap.get(m.user_id)?.email ?? null,
   }))
 
+  const canInvite = hasPermission(role, 'members:invite')
+
+  // Pending invites — only fetched for owners/admins, who can manage them.
+  let pendingInvites: InviteRow[] = []
+  if (canInvite) {
+    const { data: inviteData } = await supabase
+      .from('invites')
+      .select('id, email, role, expires_at')
+      .eq('organization_id', organization.id)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false })
+    pendingInvites = (inviteData ?? []).map((i) => ({
+      id: i.id as string,
+      email: i.email as string,
+      role: i.role as string,
+      expiresAt: new Date(i.expires_at as string).toISOString().slice(0, 10),
+    }))
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -48,6 +68,9 @@ export default async function MembersPage({
           People with access to {organization.name}.
         </p>
       </div>
+      {canInvite && (
+        <InviteSection orgSlug={orgSlug} pendingInvites={pendingInvites} />
+      )}
       <MembersTable
         orgSlug={orgSlug}
         rows={rows}
