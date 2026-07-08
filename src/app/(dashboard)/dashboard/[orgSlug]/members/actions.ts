@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { requireOrgMembership } from '@/lib/auth'
 import { hasPermission, isRole } from '@/lib/permissions'
+import { createAuditLog } from '@/lib/audit'
 
 export type MemberActionResult = { error: string } | { success: true }
 
@@ -27,7 +28,7 @@ export async function updateMemberRole(
 ): Promise<MemberActionResult> {
   // Authenticate + authorize on the server. Never trust the client: the UI
   // only hides controls; this is the real boundary.
-  const { organization, role } = await requireOrgMembership(orgSlug)
+  const { user, organization, role } = await requireOrgMembership(orgSlug)
   if (!hasPermission(role, 'members:manage')) {
     return { error: 'Only owners can change member roles.' }
   }
@@ -61,6 +62,15 @@ export async function updateMemberRole(
     .eq('organization_id', organization.id)
 
   if (error) return { error: error.message }
+
+  await createAuditLog({
+    orgId: organization.id,
+    actorUserId: user.id,
+    action: 'member.role_changed',
+    targetType: 'member',
+    targetId: target.user_id,
+    metadata: { newRole, previousRole: target.role },
+  })
 
   revalidatePath(`/dashboard/${orgSlug}/members`)
   return { success: true }
@@ -99,6 +109,15 @@ export async function removeMember(
     .eq('organization_id', organization.id)
 
   if (error) return { error: error.message }
+
+  await createAuditLog({
+    orgId: organization.id,
+    actorUserId: user.id,
+    action: 'member.removed',
+    targetType: 'member',
+    targetId: target.user_id,
+    metadata: { role: target.role },
+  })
 
   revalidatePath(`/dashboard/${orgSlug}/members`)
   return { success: true }

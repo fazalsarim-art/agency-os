@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { requireOrgMembership } from '@/lib/auth'
 import { hasPermission } from '@/lib/permissions'
+import { createAuditLog } from '@/lib/audit'
 
 export type TaskFormState = { error: string } | { success: true } | null
 
@@ -77,7 +78,7 @@ export async function createTask(
   formData: FormData
 ): Promise<TaskFormState> {
   const orgSlug = formData.get('orgSlug') as string
-  const { organization, role } = await requireOrgMembership(orgSlug)
+  const { user, organization, role } = await requireOrgMembership(orgSlug)
   if (!hasPermission(role, 'tasks:create')) {
     return { error: 'You do not have permission to add tasks.' }
   }
@@ -92,16 +93,29 @@ export async function createTask(
   const assignee = await resolveAssignee(supabase, organization.id, f.assignedTo)
   if (!assignee.ok) return { error: 'Assignee must be a member of this organization.' }
 
-  const { error } = await supabase.from('tasks').insert({
-    organization_id: organization.id,
-    project_id: project.value,
-    assigned_to: assignee.value,
-    title: f.title,
-    description: f.description || null,
-    status: f.status,
-    due_date: f.dueDate,
-  })
+  const { data: created, error } = await supabase
+    .from('tasks')
+    .insert({
+      organization_id: organization.id,
+      project_id: project.value,
+      assigned_to: assignee.value,
+      title: f.title,
+      description: f.description || null,
+      status: f.status,
+      due_date: f.dueDate,
+    })
+    .select('id')
+    .single()
   if (error) return { error: error.message }
+
+  await createAuditLog({
+    orgId: organization.id,
+    actorUserId: user.id,
+    action: 'task.created',
+    targetType: 'task',
+    targetId: created.id,
+    metadata: { title: f.title },
+  })
 
   revalidatePath(`/dashboard/${orgSlug}/tasks`)
   return { success: true }
@@ -113,7 +127,7 @@ export async function updateTask(
 ): Promise<TaskFormState> {
   const orgSlug = formData.get('orgSlug') as string
   const taskId = formData.get('taskId') as string
-  const { organization, role } = await requireOrgMembership(orgSlug)
+  const { user, organization, role } = await requireOrgMembership(orgSlug)
   if (!hasPermission(role, 'tasks:update')) {
     return { error: 'You do not have permission to edit tasks.' }
   }
@@ -142,6 +156,15 @@ export async function updateTask(
     .eq('organization_id', organization.id)
   if (error) return { error: error.message }
 
+  await createAuditLog({
+    orgId: organization.id,
+    actorUserId: user.id,
+    action: 'task.updated',
+    targetType: 'task',
+    targetId: taskId,
+    metadata: { title: f.title },
+  })
+
   revalidatePath(`/dashboard/${orgSlug}/tasks`)
   return { success: true }
 }
@@ -150,18 +173,34 @@ export async function deleteTask(
   orgSlug: string,
   taskId: string
 ): Promise<{ error: string } | { success: true }> {
-  const { organization, role } = await requireOrgMembership(orgSlug)
+  const { user, organization, role } = await requireOrgMembership(orgSlug)
   if (!hasPermission(role, 'tasks:delete')) {
     return { error: 'You do not have permission to delete tasks.' }
   }
 
   const supabase = await createClient()
+  const { data: existing } = await supabase
+    .from('tasks')
+    .select('title')
+    .eq('id', taskId)
+    .eq('organization_id', organization.id)
+    .maybeSingle()
+
   const { error } = await supabase
     .from('tasks')
     .delete()
     .eq('id', taskId)
     .eq('organization_id', organization.id)
   if (error) return { error: error.message }
+
+  await createAuditLog({
+    orgId: organization.id,
+    actorUserId: user.id,
+    action: 'task.deleted',
+    targetType: 'task',
+    targetId: taskId,
+    metadata: { title: existing?.title ?? null },
+  })
 
   revalidatePath(`/dashboard/${orgSlug}/tasks`)
   return { success: true }

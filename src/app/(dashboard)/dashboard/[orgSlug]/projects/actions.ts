@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { requireOrgMembership } from '@/lib/auth'
 import { hasPermission } from '@/lib/permissions'
+import { createAuditLog } from '@/lib/audit'
 
 export type ProjectFormState = { error: string } | { success: true } | null
 
@@ -59,7 +60,7 @@ export async function createProject(
   formData: FormData
 ): Promise<ProjectFormState> {
   const orgSlug = formData.get('orgSlug') as string
-  const { organization, role } = await requireOrgMembership(orgSlug)
+  const { user, organization, role } = await requireOrgMembership(orgSlug)
   if (!hasPermission(role, 'projects:create')) {
     return { error: 'You do not have permission to add projects.' }
   }
@@ -72,15 +73,28 @@ export async function createProject(
   const client = await resolveClientId(supabase, organization.id, f.clientId)
   if (!client.ok) return { error: 'Selected client was not found.' }
 
-  const { error } = await supabase.from('projects').insert({
-    organization_id: organization.id,
-    client_id: client.value,
-    name: f.name,
-    description: f.description || null,
-    status: f.status,
-    due_date: f.dueDate,
-  })
+  const { data: created, error } = await supabase
+    .from('projects')
+    .insert({
+      organization_id: organization.id,
+      client_id: client.value,
+      name: f.name,
+      description: f.description || null,
+      status: f.status,
+      due_date: f.dueDate,
+    })
+    .select('id')
+    .single()
   if (error) return { error: error.message }
+
+  await createAuditLog({
+    orgId: organization.id,
+    actorUserId: user.id,
+    action: 'project.created',
+    targetType: 'project',
+    targetId: created.id,
+    metadata: { name: f.name },
+  })
 
   revalidatePath(`/dashboard/${orgSlug}/projects`)
   return { success: true }
@@ -92,7 +106,7 @@ export async function updateProject(
 ): Promise<ProjectFormState> {
   const orgSlug = formData.get('orgSlug') as string
   const projectId = formData.get('projectId') as string
-  const { organization, role } = await requireOrgMembership(orgSlug)
+  const { user, organization, role } = await requireOrgMembership(orgSlug)
   if (!hasPermission(role, 'projects:update')) {
     return { error: 'You do not have permission to edit projects.' }
   }
@@ -118,6 +132,15 @@ export async function updateProject(
     .eq('organization_id', organization.id)
   if (error) return { error: error.message }
 
+  await createAuditLog({
+    orgId: organization.id,
+    actorUserId: user.id,
+    action: 'project.updated',
+    targetType: 'project',
+    targetId: projectId,
+    metadata: { name: f.name },
+  })
+
   revalidatePath(`/dashboard/${orgSlug}/projects`)
   return { success: true }
 }
@@ -126,18 +149,34 @@ export async function deleteProject(
   orgSlug: string,
   projectId: string
 ): Promise<{ error: string } | { success: true }> {
-  const { organization, role } = await requireOrgMembership(orgSlug)
+  const { user, organization, role } = await requireOrgMembership(orgSlug)
   if (!hasPermission(role, 'projects:delete')) {
     return { error: 'You do not have permission to delete projects.' }
   }
 
   const supabase = await createClient()
+  const { data: existing } = await supabase
+    .from('projects')
+    .select('name')
+    .eq('id', projectId)
+    .eq('organization_id', organization.id)
+    .maybeSingle()
+
   const { error } = await supabase
     .from('projects')
     .delete()
     .eq('id', projectId)
     .eq('organization_id', organization.id)
   if (error) return { error: error.message }
+
+  await createAuditLog({
+    orgId: organization.id,
+    actorUserId: user.id,
+    action: 'project.deleted',
+    targetType: 'project',
+    targetId: projectId,
+    metadata: { name: existing?.name ?? null },
+  })
 
   revalidatePath(`/dashboard/${orgSlug}/projects`)
   return { success: true }

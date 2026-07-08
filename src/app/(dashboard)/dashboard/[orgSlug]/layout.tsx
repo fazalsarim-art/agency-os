@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { requireOrgMembership } from '@/lib/auth'
+import { hasPermission } from '@/lib/permissions'
 import { signOut } from '@/app/(auth)/actions'
 import { Button } from '@/components/ui/button'
 
@@ -15,7 +16,7 @@ export default async function OrgLayout({
 
   // Membership guard: 404s anyone who isn't a member of this org. Also gives us
   // the org record and the user's role for the whole subtree.
-  const { user, organization } = await requireOrgMembership(orgSlug)
+  const { user, organization, role } = await requireOrgMembership(orgSlug)
 
   const supabase = await createClient()
   const { data: profile } = await supabase
@@ -73,6 +74,14 @@ export default async function OrgLayout({
         >
           Members
         </Link>
+        {hasPermission(role, 'auditLogs:view') && (
+          <Link
+            href={`${base}/audit-logs`}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            Audit Logs
+          </Link>
+        )}
       </nav>
       <main className="flex-1 p-6">{children}</main>
     </div>
