@@ -50,6 +50,12 @@ export default async function OrgLayout({
           Overview
         </Link>
         <Link
+          href={`${base}/clients`}
+          className="text-muted-foreground hover:text-foreground"
+        >
+          Clients
+        </Link>
+        <Link
           href={`${base}/members`}
           className="text-muted-foreground hover:text-foreground"
         >
