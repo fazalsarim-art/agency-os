@@ -82,6 +82,14 @@ export default async function OrgLayout({
             Audit Logs
           </Link>
         )}
+        {hasPermission(role, 'billing:manage') && (
+          <Link
+            href={`${base}/billing`}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            Billing
+          </Link>
+        )}
       </nav>
       <main className="flex-1 p-6">{children}</main>
     </div>
