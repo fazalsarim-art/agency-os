@@ -7,6 +7,7 @@ import { requireOrgMembership } from '@/lib/auth'
 import { hasPermission, isRole } from '@/lib/permissions'
 import { createAuditLog } from '@/lib/audit'
 import { generateInviteToken, hashToken, inviteExpiryDate } from '@/lib/invites'
+import { checkLimit, limitReachedMessage } from '@/lib/limits'
 
 export type MemberActionResult = { error: string } | { success: true }
 
@@ -170,6 +171,12 @@ export async function createInvite(
   }
 
   const supabase = await createClient()
+
+  // Enforce the plan's member limit (based on current member count).
+  const memberLimit = await checkLimit(supabase, organization.id, 'members')
+  if (!memberLimit.allowed) {
+    return { error: limitReachedMessage('members', memberLimit.plan) }
+  }
 
   // Avoid duplicate pending invites for the same email.
   const { data: pending } = await supabase

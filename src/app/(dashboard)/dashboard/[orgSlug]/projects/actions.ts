@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import { requireOrgMembership } from '@/lib/auth'
 import { hasPermission } from '@/lib/permissions'
 import { createAuditLog } from '@/lib/audit'
+import { checkLimit, limitReachedMessage } from '@/lib/limits'
 
 export type ProjectFormState = { error: string } | { success: true } | null
 
@@ -72,6 +73,9 @@ export async function createProject(
   const supabase = await createClient()
   const client = await resolveClientId(supabase, organization.id, f.clientId)
   if (!client.ok) return { error: 'Selected client was not found.' }
+
+  const limit = await checkLimit(supabase, organization.id, 'projects')
+  if (!limit.allowed) return { error: limitReachedMessage('projects', limit.plan) }
 
   const { data: created, error } = await supabase
     .from('projects')

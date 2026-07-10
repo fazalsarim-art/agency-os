@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { hashToken } from '@/lib/invites'
 import { createAuditLog } from '@/lib/audit'
+import { PLANS, type PlanId } from '@/lib/plans'
 
 // Accepts an invite for the currently logged-in user. Re-validates everything
 // on the server (never trusts the page's render). Uses the admin client because
@@ -29,6 +30,27 @@ export async function acceptInvite(token: string): Promise<{ error: string }> {
   if (new Date(invite.expires_at) < new Date()) return { error: 'This invite has expired.' }
   if ((user.email ?? '').toLowerCase() !== invite.email.toLowerCase()) {
     return { error: `This invite was sent to ${invite.email}.` }
+  }
+
+  // Hard backstop: enforce the org's member limit at acceptance time.
+  const { data: subRow } = await admin
+    .from('subscriptions')
+    .select('plan, status')
+    .eq('organization_id', invite.organization_id)
+    .maybeSingle()
+  const planId: PlanId =
+    subRow && (subRow.status === 'active' || subRow.status === 'trialing')
+      ? (subRow.plan as PlanId)
+      : 'free'
+  const { count: memberCount } = await admin
+    .from('organization_members')
+    .select('id', { count: 'exact', head: true })
+    .eq('organization_id', invite.organization_id)
+  if ((memberCount ?? 0) >= PLANS[planId].limits.members) {
+    return {
+      error:
+        'This organization has reached its member limit. Ask an owner to upgrade the plan.',
+    }
   }
 
   // Add the membership. Ignore a unique-violation (already a member) so a

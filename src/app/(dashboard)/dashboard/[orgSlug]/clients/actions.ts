@@ -7,6 +7,7 @@ import { createClient as createServerClient } from '@/lib/supabase/server'
 import { requireOrgMembership } from '@/lib/auth'
 import { hasPermission } from '@/lib/permissions'
 import { createAuditLog } from '@/lib/audit'
+import { checkLimit, limitReachedMessage } from '@/lib/limits'
 
 export type ClientFormState = { error: string } | { success: true } | null
 
@@ -48,6 +49,10 @@ export async function createClient(
   if (err) return { error: err }
 
   const supabase = await createServerClient()
+
+  const limit = await checkLimit(supabase, organization.id, 'clients')
+  if (!limit.allowed) return { error: limitReachedMessage('clients', limit.plan) }
+
   const { data: created, error } = await supabase
     .from('clients')
     .insert({

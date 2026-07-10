@@ -49,6 +49,8 @@ function describe(log: LogRow, nameOf: (id: string | null) => string): string {
       return `invited ${metaStr(m, 'email')} as ${metaStr(m, 'role')}`
     case 'invite.accepted':
       return `accepted the invitation to join as ${metaStr(m, 'role')}`
+    case 'organization.renamed':
+      return `renamed the organization to “${metaStr(m, 'name')}”`
     default:
       return log.action
   }

@@ -1,7 +1,7 @@
 import { requireOrgMembership } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { hasPermission } from '@/lib/permissions'
-import { PLANS, PLAN_ORDER, getPlan } from '@/lib/plans'
+import { PLANS, PLAN_ORDER, getPlan, formatLimit } from '@/lib/plans'
 import { BillingPlans, type PlanCard } from './billing-plans'
 
 export default async function BillingPage({
@@ -50,6 +50,18 @@ export default async function BillingPage({
     }
   })
 
+  // Current usage vs the plan's limits.
+  const [clientsRes, projectsRes, membersRes] = await Promise.all([
+    supabase.from('clients').select('id', { count: 'exact', head: true }).eq('organization_id', organization.id),
+    supabase.from('projects').select('id', { count: 'exact', head: true }).eq('organization_id', organization.id),
+    supabase.from('organization_members').select('id', { count: 'exact', head: true }).eq('organization_id', organization.id),
+  ])
+  const usage = [
+    { label: 'Clients', current: clientsRes.count ?? 0, limit: currentPlan.limits.clients },
+    { label: 'Projects', current: projectsRes.count ?? 0, limit: currentPlan.limits.projects },
+    { label: 'Members', current: membersRes.count ?? 0, limit: currentPlan.limits.members },
+  ]
+
   return (
     <div className="space-y-6">
       <div>
@@ -71,14 +83,31 @@ export default async function BillingPage({
         </p>
       )}
 
-      <div className="border rounded-lg p-4">
-        <p className="text-sm text-muted-foreground">Current plan</p>
-        <p className="text-lg font-semibold">
-          {currentPlan.name}{' '}
-          <span className="text-sm font-normal text-muted-foreground">
-            ({status})
-          </span>
-        </p>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="border rounded-lg p-4">
+          <p className="text-sm text-muted-foreground">Current plan</p>
+          <p className="text-lg font-semibold">
+            {currentPlan.name}{' '}
+            <span className="text-sm font-normal text-muted-foreground">
+              ({status})
+            </span>
+          </p>
+        </div>
+        <div className="border rounded-lg p-4 space-y-2">
+          <p className="text-sm font-medium">Usage</p>
+          {usage.map((u) => (
+            <div key={u.label} className="flex justify-between text-sm">
+              <span className="text-muted-foreground">{u.label}</span>
+              <span
+                className={
+                  u.current >= u.limit ? 'font-medium text-destructive' : ''
+                }
+              >
+                {u.current} / {formatLimit(u.limit)}
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
 
       <BillingPlans
