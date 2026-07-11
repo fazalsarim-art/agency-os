@@ -43,6 +43,7 @@ export function SettingsForm({
         <div className="space-y-2 max-w-sm">
           <Label htmlFor="name">Name</Label>
           <Input
+            key={currentName}
             id="name"
             name="name"
             defaultValue={currentName}
