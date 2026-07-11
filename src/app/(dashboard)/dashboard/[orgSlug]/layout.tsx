@@ -1,9 +1,9 @@
-import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { requireOrgMembership } from '@/lib/auth'
 import { hasPermission } from '@/lib/permissions'
 import { signOut } from '@/app/(auth)/actions'
 import { Button } from '@/components/ui/button'
+import { SidebarNav, type NavItem } from '@/components/dashboard/sidebar-nav'
 
 export default async function OrgLayout({
   children,
@@ -27,79 +27,48 @@ export default async function OrgLayout({
 
   const base = `/dashboard/${orgSlug}`
 
+  const items: NavItem[] = [
+    { href: base, label: 'Overview', exact: true },
+    { href: `${base}/clients`, label: 'Clients' },
+    { href: `${base}/projects`, label: 'Projects' },
+    { href: `${base}/tasks`, label: 'Tasks' },
+    { href: `${base}/members`, label: 'Members' },
+    ...(hasPermission(role, 'auditLogs:view')
+      ? [{ href: `${base}/audit-logs`, label: 'Audit Logs' }]
+      : []),
+    ...(hasPermission(role, 'billing:manage')
+      ? [{ href: `${base}/billing`, label: 'Billing' }]
+      : []),
+    ...(hasPermission(role, 'organization:manage')
+      ? [{ href: `${base}/settings`, label: 'Settings' }]
+      : []),
+  ]
+
   return (
-    <div className="flex min-h-screen flex-col">
-      <header className="border-b px-6 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <span className="font-semibold text-lg">AgencyOS</span>
-          <span className="text-muted-foreground text-sm">/</span>
-          <span className="text-sm font-medium">{organization.name}</span>
+    <div className="min-h-screen md:flex">
+      <aside className="shrink-0 border-b md:min-h-screen md:w-60 md:border-b-0 md:border-r">
+        <div className="px-5 py-4 md:border-b">
+          <span className="text-lg font-semibold">AgencyOS</span>
         </div>
-        <div className="flex items-center gap-4">
-          <span className="text-sm text-muted-foreground">
-            {profile?.full_name ?? user.email}
-          </span>
-          <form action={signOut}>
-            <Button variant="outline" size="sm" type="submit">
-              Sign out
-            </Button>
-          </form>
-        </div>
-      </header>
-      <nav className="border-b px-6 py-2 flex items-center gap-4 text-sm">
-        <Link href={base} className="text-muted-foreground hover:text-foreground">
-          Overview
-        </Link>
-        <Link
-          href={`${base}/clients`}
-          className="text-muted-foreground hover:text-foreground"
-        >
-          Clients
-        </Link>
-        <Link
-          href={`${base}/projects`}
-          className="text-muted-foreground hover:text-foreground"
-        >
-          Projects
-        </Link>
-        <Link
-          href={`${base}/tasks`}
-          className="text-muted-foreground hover:text-foreground"
-        >
-          Tasks
-        </Link>
-        <Link
-          href={`${base}/members`}
-          className="text-muted-foreground hover:text-foreground"
-        >
-          Members
-        </Link>
-        {hasPermission(role, 'auditLogs:view') && (
-          <Link
-            href={`${base}/audit-logs`}
-            className="text-muted-foreground hover:text-foreground"
-          >
-            Audit Logs
-          </Link>
-        )}
-        {hasPermission(role, 'billing:manage') && (
-          <Link
-            href={`${base}/billing`}
-            className="text-muted-foreground hover:text-foreground"
-          >
-            Billing
-          </Link>
-        )}
-        {hasPermission(role, 'organization:manage') && (
-          <Link
-            href={`${base}/settings`}
-            className="text-muted-foreground hover:text-foreground"
-          >
-            Settings
-          </Link>
-        )}
-      </nav>
-      <main className="flex-1 p-6">{children}</main>
+        <SidebarNav items={items} />
+      </aside>
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="flex items-center justify-between border-b px-6 py-3">
+          <span className="truncate text-sm font-medium">{organization.name}</span>
+          <div className="flex items-center gap-4">
+            <span className="hidden text-sm text-muted-foreground sm:inline">
+              {profile?.full_name ?? user.email}
+            </span>
+            <form action={signOut}>
+              <Button variant="outline" size="sm" type="submit">
+                Sign out
+              </Button>
+            </form>
+          </div>
+        </header>
+        <main className="flex-1 p-6">{children}</main>
+      </div>
     </div>
   )
 }
