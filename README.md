@@ -31,17 +31,27 @@ Try it at **[agency-os-ten-alpha.vercel.app](https://agency-os-ten-alpha.vercel.
 
 > Billing runs in **Stripe test mode** — upgrade with card `4242 4242 4242 4242`, any future expiry, any CVC.
 
-## 📸 Screenshots
+## 🏗️ How it works
 
-> _Add images to `docs/screenshots/` and they'll render here._
+Every request passes through **three independent authorization layers** — a flaw in any one is caught by the next — with tenant isolation ultimately guaranteed by the database, not just application code:
 
-| Dashboard | Billing |
-|---|---|
-| ![Dashboard overview](docs/screenshots/dashboard.png) | ![Billing & plans](docs/screenshots/billing.png) |
+```mermaid
+flowchart LR
+    U(["User / Browser"])
+    UI["1 · UI layer<br/>hides controls by role"]
+    SA["2 · Server actions<br/>membership + permission checks"]
+    DB[("3 · PostgreSQL + RLS<br/>tenant isolation in the database")]
+    AUTH["Supabase Auth"]
+    STRIPE["Stripe<br/>Checkout · Portal · Webhooks"]
 
-| Team & roles | Audit log |
-|---|---|
-| ![Members and roles](docs/screenshots/members.png) | ![Audit log](docs/screenshots/audit-log.png) |
+    U --> UI --> SA --> DB
+    U -. "sign in" .-> AUTH
+    AUTH -. "session" .-> SA
+    SA <--> STRIPE
+    STRIPE -. "signed webhook" .-> SA
+```
+
+> 👀 **See it running:** the [live demo](https://agency-os-ten-alpha.vercel.app) is seeded with data — sign in with any role from the table above to explore the actual app.
 
 ## ✨ Features
 
